@@ -2,8 +2,16 @@ name: Commercial Invoice Upload for ICO
 
 on:
   schedule:
+    - cron: "1/10 * * * *"
+    - cron: "3/10 * * * *"
+    - cron: "5/10 * * * *"
     - cron: "7/10 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: scheduled-worker
+  cancel-in-progress: false
+  
 jobs:
   run-script:
     runs-on: ubuntu-latest
