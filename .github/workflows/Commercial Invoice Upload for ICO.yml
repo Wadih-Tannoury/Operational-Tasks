@@ -2,7 +2,7 @@ name: Commercial Invoice Upload for ICO
 
 on:
   schedule:
-    - cron: "0/10 * * * *"
+    - cron: "0/20 * * * *"
   workflow_dispatch:
 jobs:
   run-script:
