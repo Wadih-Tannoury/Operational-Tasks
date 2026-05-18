@@ -1,0 +1,9 @@
+pandas
+requests
+google-cloud-bigquery
+google-auth
+openpyxl
+psycopg2-binary
+db-dtypes
+pg8000
+cloud-sql-python-connector
