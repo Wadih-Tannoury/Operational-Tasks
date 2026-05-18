@@ -9,7 +9,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 
-API_CREDENTIALS_SECRET = "API_CREDENTIALS_JSON"
+API_CREDENTIALS_SECRET = "KIBO_API_CREDENTIALS"
 BQ_CREDENTIALS_SECRET = "BQ_CREDENTIALS_JSON"
 
 HOST = "tp3.mozu.com"
