@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      API_CREDENTIALS_JSON: ${{ secrets.API_CREDENTIALS_JSON }}
-      BQ_CREDENTIALS_JSON: ${{ secrets.BQ_CREDENTIALS_JSON }}
+      KIBO_API_CREDENTIALS: ${{ secrets.KIBO_API_CREDENTIALS }}
+      TIL_BIGQUERY_CREDS: ${{ secrets.TIL_BIGQUERY_CREDS }}
 
     steps:
       - name: Checkout repository
