@@ -10,7 +10,7 @@ from google.oauth2 import service_account
 
 
 API_CREDENTIALS_SECRET = "KIBO_API_CREDENTIALS"
-BQ_CREDENTIALS_SECRET = "BQ_CREDENTIALS_JSON"
+BQ_CREDENTIALS_SECRET = "TIL_BIGQUERY_CREDS"
 
 HOST = "tp3.mozu.com"
 AUTH_URL = "https://home.mozu.com/api/platform/applications/authtickets/oauth"
