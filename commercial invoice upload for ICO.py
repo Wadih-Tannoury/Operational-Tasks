@@ -62,7 +62,7 @@ WHERE EXISTS (
   SELECT 1
   FROM `tlg-wlfs-prd`.til.prd_tilEvents fatv
   WHERE fatv.eventType = 'FATV_RESULT'
-    AND fatv.eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 MINUTE)
+    AND fatv.eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 15 MINUTE)
     AND COALESCE(
       JSON_VALUE(fatv.requestPayload, '$.data.fatvResult.shipmentOrderNumber'),
       JSON_VALUE(fatv.requestPayload, '$.shipmentOrderNumber'),
