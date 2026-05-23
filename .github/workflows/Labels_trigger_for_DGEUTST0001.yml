@@ -1,4 +1,4 @@
-name: FATV Logic App Trigger
+name: Labels_trigger_for_DGEUTST0001
 
 on:
   workflow_dispatch:
