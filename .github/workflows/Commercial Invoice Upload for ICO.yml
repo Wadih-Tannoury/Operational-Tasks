@@ -31,6 +31,3 @@ jobs:
 
       - name: Run commercial invoice script
         run: python "commercial invoice upload for ICO.py"
-
-      - name: Run FATV trigger script
-        run: python "fatv_trigger.py"
