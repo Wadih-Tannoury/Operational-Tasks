@@ -29,4 +29,4 @@ jobs:
           pip install requests google-cloud-bigquery google-auth
 
       - name: Run script
-        run: python "fatv_logic_app_trigger.py"
+        run: python "Labels_triggering_for_DGEUTST0001.py"
