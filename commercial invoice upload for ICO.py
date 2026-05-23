@@ -18,72 +18,29 @@ AUTH_URL = "https://home.mozu.com/api/platform/applications/authtickets/oauth"
 COUNTRY_CODES = {"US", "UK", "GB"}
 NOTE_MARKER = "_IUS"
 IUS_NOTE_PATTERN = re.compile(r"(?:^|[^A-Z0-9])_?IUS[-_][A-Z0-9]+", re.IGNORECASE)
-FATV_EVENT_TYPE = "FATV_RESULT"
 NOTE_TIME_TOLERANCE = timedelta(minutes=5)
 
 QUERY = """
-WITH ready_events AS (
-  SELECT
-    *,
-    COALESCE(
-      JSON_VALUE(requestPayload, '$.shipmentOrderNumber'),
-      JSON_VALUE(requestPayload, '$.data.shipmentOrderNumber'),
-      (
-        SELECT JSON_VALUE(ep, '$.value')
-        FROM UNNEST(JSON_QUERY_ARRAY(requestPayload, '$.extendedProperties')) ep
-        WHERE JSON_VALUE(ep, '$.key') = 'shipmentOrderNumber'
-        LIMIT 1
-      ),
-      orderNumber
-    ) AS ready_shipment_order_number
-  FROM `tlg-wlfs-prd`.til.prd_tilEvents
-  WHERE EXISTS (
-    SELECT 1
-    FROM UNNEST(JSON_QUERY_ARRAY(requestPayload, '$.extendedProperties')) ep
-    WHERE JSON_VALUE(ep, '$.key') = 'fulfillmentLocationCode'
-      AND (
-        JSON_VALUE(ep, '$.value') LIKE '%ITST%'
-        OR JSON_VALUE(ep, '$.value') = 'CVITWHRCLA'
-        OR JSON_VALUE(ep, '$.value') LIKE '%FRST%'
-        OR JSON_VALUE(ep, '$.value') LIKE '%ESST%'
-      )
-  )
-  AND EXISTS (
-    SELECT 1
-    FROM UNNEST(JSON_QUERY_ARRAY(requestPayload, '$.extendedProperties')) ep
-    WHERE JSON_VALUE(ep, '$.key') = 'newStatus'
-      AND JSON_VALUE(ep, '$.value') = 'READY'
-  )
-  AND orderNumber NOT LIKE 'DJ%'
-)
-SELECT r.* EXCEPT(ready_shipment_order_number)
-FROM ready_events r
-WHERE EXISTS (
-  SELECT 1
-  FROM `tlg-wlfs-prd`.til.prd_tilEvents fatv
-  WHERE fatv.eventType = 'FATV_RESULT'
-    AND fatv.eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 15 MINUTE)
-    AND COALESCE(
-      JSON_VALUE(fatv.requestPayload, '$.data.fatvResult.shipmentOrderNumber'),
-      JSON_VALUE(fatv.requestPayload, '$.shipmentOrderNumber'),
-      fatv.shipmentOrderNumber,
-      fatv.orderNumber
-    ) = r.ready_shipment_order_number
-)
-"""
-
-EVENT_QUERY = """
-SELECT *
-FROM `tlg-wlfs-prd`.til.prd_tilEvents
-WHERE eventType = @event_type
-  AND COALESCE(
+SELECT
+  *,
+  COALESCE(
     JSON_VALUE(requestPayload, '$.data.fatvResult.shipmentOrderNumber'),
     JSON_VALUE(requestPayload, '$.shipmentOrderNumber'),
     shipmentOrderNumber,
     orderNumber
-  ) = @shipment_order_number
-ORDER BY eventTimestamp DESC
-LIMIT 10
+  ) AS fatv_shipment_order_number,
+  JSON_VALUE(requestPayload, '$.data.fatvResult.invoiceNumber') AS fatv_invoice_number,
+  JSON_VALUE(requestPayload, '$.data.fatvResult.locationCode') AS fatv_location_code
+FROM `tlg-wlfs-prd`.til.prd_tilEvents
+WHERE eventType = 'FATV_RESULT'
+  AND eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 15 MINUTE)
+  AND COALESCE(orderNumber, '') NOT LIKE 'DJ%'
+  AND (
+    JSON_VALUE(requestPayload, '$.data.fatvResult.locationCode') LIKE '%ITST%'
+    OR JSON_VALUE(requestPayload, '$.data.fatvResult.locationCode') = 'CVITWHRCLA'
+    OR JSON_VALUE(requestPayload, '$.data.fatvResult.locationCode') LIKE '%FRST%'
+    OR JSON_VALUE(requestPayload, '$.data.fatvResult.locationCode') LIKE '%ESST%'
+  )
 """
 
 
@@ -112,7 +69,7 @@ def parse_payload(payload):
 
 def get_extended_property(payload: dict, key: str):
     for item in payload.get("extendedProperties", []):
-        if item.get("key") == key:
+        if isinstance(item, dict) and item.get("key") == key:
             return item.get("value")
     return None
 
@@ -181,9 +138,7 @@ def authenticate() -> str:
 def get_bigquery_client():
     creds_info = load_json_from_secret(BQ_CREDENTIALS_SECRET)
 
-    credentials = service_account.Credentials.from_service_account_info(
-        creds_info
-    )
+    credentials = service_account.Credentials.from_service_account_info(creds_info)
 
     return bigquery.Client(
         credentials=credentials,
@@ -193,19 +148,6 @@ def get_bigquery_client():
 
 def get_bigquery_rows(client):
     return client.query(QUERY).result()
-
-
-def get_til_event_rows(client, shipment_order_number: str, event_type: str):
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter(
-                "shipment_order_number", "STRING", shipment_order_number
-            ),
-            bigquery.ScalarQueryParameter("event_type", "STRING", event_type),
-        ]
-    )
-
-    return list(client.query(EVENT_QUERY, job_config=job_config).result())
 
 
 def get_order(token: str, tenant_id: str, site_id: str, order_id: str) -> dict:
@@ -231,7 +173,7 @@ def get_shipment(
     oms_shipment_number: str,
 ) -> dict:
     url = (
-        f"https://t{tenant_id}.tp3.mozu.com"
+        f"https://t{tenant_id}.{HOST}"
         f"/api/commerce/shipments?filter=shipmentNumber=={oms_shipment_number}"
     )
 
@@ -318,7 +260,7 @@ def post_shipment_note(
     note_text: str,
 ):
     url = (
-        f"https://t{tenant_id}.tp3.mozu.com"
+        f"https://t{tenant_id}.{HOST}"
         f"/api/commerce/shipments/{oms_shipment_number}/notes"
     )
 
@@ -350,27 +292,12 @@ def extract_country_code(order: dict):
     )
 
 
-def get_fatv_result(payload: dict):
-    data = payload.get("data") or {}
-
-    if not isinstance(data, dict):
-        return {}
-
-    fatv_result = data.get("fatvResult") or {}
-
-    return fatv_result if isinstance(fatv_result, dict) else {}
-
-
-def extract_fatv_invoice_number(fatv_payload: dict):
-    return get_fatv_result(fatv_payload).get("invoiceNumber")
-
-
 def find_note_containing(order: dict, value: str):
     if not value:
         return None
 
-    for note in order.get("notes", []):
-        text = note.get("text", "")
+    for note in iter_order_notes(order):
+        text = note.get("text", "") if isinstance(note, dict) else str(note)
         if value in text:
             return text
 
@@ -381,8 +308,7 @@ def is_ius_note_text(text: str) -> bool:
     if not text:
         return False
 
-    text = str(text)
-    upper_text = text.upper()
+    upper_text = str(text).upper()
 
     if any(
         marker in upper_text
@@ -462,40 +388,6 @@ def find_ius_note(order: dict, fatv_event_timestamp=None):
     return None
 
 
-def get_fatv_invoice_number(client, shipment_order_number: str):
-    rows = get_til_event_rows(client, shipment_order_number, FATV_EVENT_TYPE)
-
-    if not rows:
-        return None
-
-    for row in rows:
-        payload = parse_payload(row["requestPayload"])
-        fatv_invoice_number = extract_fatv_invoice_number(payload)
-
-        if fatv_invoice_number:
-            return fatv_invoice_number
-
-    return None
-
-
-def get_fatv_event_timestamp(client, shipment_order_number: str):
-    rows = get_til_event_rows(client, shipment_order_number, FATV_EVENT_TYPE)
-
-    if not rows:
-        return None
-
-    for row in rows:
-        payload = parse_payload(row["requestPayload"])
-        event_timestamp = parse_datetime(
-            payload.get("eventTimestamp") or row.get("eventTimestamp")
-        )
-
-        if event_timestamp:
-            return event_timestamp
-
-    return None
-
-
 def main():
     token = authenticate()
     logging.info("Authenticated successfully")
@@ -511,15 +403,34 @@ def main():
         try:
             payload = parse_payload(row["requestPayload"])
 
-            tenant_id = payload.get("x-vol-tenant")
-            site_id = payload.get("x-vol-site")
-            order_id = get_extended_property(payload, "orderId")
-            oms_shipment_number = payload.get("entityId")
+            tenant_id = (
+                payload.get("x-vol-tenant")
+                or get_first_value(payload, "tenantId")
+            )
+
+            site_id = (
+                payload.get("x-vol-site")
+                or get_first_value(payload, "siteId")
+            )
+
+            order_id = get_first_value(payload, "orderId")
+
+            oms_shipment_number = (
+                payload.get("entityId")
+                or get_first_value(payload, "shipmentNumber")
+            )
 
             shipment_order_number = (
-                get_first_value(payload, "shipmentOrderNumber", "orderNumber")
+                row.get("fatv_shipment_order_number")
+                or get_first_value(payload, "shipmentOrderNumber", "orderNumber")
                 or row.get("shipmentOrderNumber")
                 or row.get("orderNumber")
+            )
+
+            fatv_invoice_number = row.get("fatv_invoice_number")
+
+            fatv_event_timestamp = parse_datetime(
+                payload.get("eventTimestamp") or row.get("eventTimestamp")
             )
 
             if not all(
@@ -542,11 +453,6 @@ def main():
                     shipment_order_number,
                 )
                 continue
-
-            fatv_invoice_number = get_fatv_invoice_number(
-                client,
-                shipment_order_number,
-            )
 
             order = get_order(token, tenant_id, site_id, order_id)
             country_code = extract_country_code(order)
@@ -581,11 +487,6 @@ def main():
                     continue
 
             else:
-                fatv_event_timestamp = get_fatv_event_timestamp(
-                    client,
-                    shipment_order_number,
-                )
-
                 note_text = find_ius_note(order, fatv_event_timestamp)
 
                 if not note_text:
