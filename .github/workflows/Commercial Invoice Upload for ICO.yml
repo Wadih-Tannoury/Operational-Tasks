@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests google-cloud-bigquery google-auth
 
       - name: Run commercial invoice script
         run: python "commercial invoice upload for ICO.py"
