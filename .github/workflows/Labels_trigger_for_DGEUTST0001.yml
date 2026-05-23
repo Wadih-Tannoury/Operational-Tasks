@@ -1,0 +1,32 @@
+name: FATV Logic App Trigger
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: fatv-logic-app-trigger
+  cancel-in-progress: false
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    env:
+      TIL_BIGQUERY_CREDS: ${{ secrets.TIL_BIGQUERY_CREDS }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests google-cloud-bigquery google-auth
+
+      - name: Run script
+        run: python "fatv_logic_app_trigger.py"
