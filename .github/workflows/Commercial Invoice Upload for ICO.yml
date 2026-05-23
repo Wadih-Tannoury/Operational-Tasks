@@ -1,15 +1,14 @@
 name: Commercial Invoice Upload for ICO
 
 on:
-
   workflow_dispatch:
 
 concurrency:
   group: scheduled-worker
   cancel-in-progress: false
-  
+
 jobs:
-  run-script:
+  run-commercial-invoice-script:
     runs-on: ubuntu-latest
 
     env:
@@ -30,5 +29,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run script
+      - name: Run commercial invoice script
         run: python "commercial invoice upload for ICO.py"
+
+      - name: Run FATV trigger script
+        run: python "fatv_trigger.py"
