@@ -10,13 +10,14 @@ from google.oauth2 import service_account
 BQ_CREDENTIALS_SECRET = "TIL_BIGQUERY_CREDS"
 
 LOGIC_APP_URL = (
-    "https://prod-09.northeurope.logic.azure.com/workflows/hh/"
+    "https://prod-09.northeurope.logic.azure.com/workflows/"
+    "8fca928224de4819aa279973e08f9008/"
     "triggers/request/paths/invoke"
 )
 
 LOGIC_APP_PARAMS = {
     "api-version": "2016-10-01",
-    "sp": "%2Ftriggers%2request%2Frun",
+    "sp": "/triggers/request/run",
     "sv": "1.0",
     "sig": "5Ay_LV4SS9h3gw9zCfftJ0LabeCnfuig7BgkH9fcAU4",
 }
@@ -26,7 +27,7 @@ SELECT DISTINCT shipmentOrderNumber
 FROM `tlg-wlfs-prd`.til.prd_tilEvents
 WHERE eventType = 'FATV_RESULT'
   AND requestPayload LIKE '%"locationCode": "DGEUTST0001"%'
-  AND eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1440 MINUTE)
+  AND eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10000 MINUTE)
   AND shipmentOrderNumber IS NOT NULL
 """
 
@@ -48,7 +49,6 @@ def load_json_from_secret(secret_name: str) -> dict:
 
 def get_bigquery_client():
     creds_info = load_json_from_secret(BQ_CREDENTIALS_SECRET)
-
     credentials = service_account.Credentials.from_service_account_info(creds_info)
 
     return bigquery.Client(
@@ -64,12 +64,8 @@ def get_shipment_order_numbers(client):
 
 def post_order(shipment_order_number: str):
     headers = {
-        "Cache-Control": "no-cache",
         "Content-Type": "application/json",
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "User-Agent": "PostmanRuntime/7.54.0",
+        "Accept": "application/json",
     }
 
     body = {
@@ -86,13 +82,17 @@ def post_order(shipment_order_number: str):
         timeout=30,
     )
 
+    if not response.ok:
+        logging.error("Status code: %s", response.status_code)
+        logging.error("Response body: %s", response.text)
+        logging.error("Final URL: %s", response.url)
+
     response.raise_for_status()
     return response.text
 
 
 def main():
     client = get_bigquery_client()
-
     shipment_order_numbers = get_shipment_order_numbers(client)
 
     logging.info("Found %s shipmentOrderNumber(s)", len(shipment_order_numbers))
