@@ -26,7 +26,7 @@ SELECT DISTINCT shipmentOrderNumber
 FROM `tlg-wlfs-prd`.til.prd_tilEvents
 WHERE eventType = 'FATV_RESULT'
   AND requestPayload LIKE '%"locationCode": "DGEUTST0001"%'
-  AND eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10000 MINUTE)
+  AND eventTimestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1440 MINUTE)
   AND shipmentOrderNumber IS NOT NULL
 """
 
