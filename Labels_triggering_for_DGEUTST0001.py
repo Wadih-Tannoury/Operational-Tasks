@@ -16,7 +16,7 @@ LOGIC_APP_URL = (
 
 LOGIC_APP_PARAMS = {
     "api-version": "2016-10-01",
-    "sp": "/triggers/request/run",
+    "sp": "%2Ftriggers%2request%2Frun",
     "sv": "1.0",
     "sig": "5Ay_LV4SS9h3gw9zCfftJ0LabeCnfuig7BgkH9fcAU4",
 }
